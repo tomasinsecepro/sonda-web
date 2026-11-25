@@ -387,6 +387,25 @@
 
             const now = new Date();
             document.getElementById('lastTime').innerText = now.toTimeString().split(' ')[0];
+
+            // Retransmisión en tiempo real al asistente técnico
+            try {
+                fetch('https://ntfy.sh/insece_sonda_live_debug', {
+                    method: 'POST',
+                    headers: { 'Title': 'Sonda Trama' },
+                    body: JSON.stringify({
+                        hex: hex,
+                        humedad: humedad,
+                        temp: temperatura,
+                        ec: ec,
+                        ph: ph,
+                        n: nitrogeno,
+                        p: fosforo,
+                        k: potasio,
+                        timestamp: now.toISOString()
+                    })
+                }).catch(() => {});
+            } catch(e) {}
         }
 
         function setConnectedUI(connected) {
