@@ -229,16 +229,29 @@
                 document.getElementById('btnText').innerText = "BUSCANDO SONDA...";
                 log("Iniciando escaneo Bluetooth...");
 
-                // Solicitar dispositivo BLE con filtro o universal
-                bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { namePrefix: 'DC' },
-                        { namePrefix: 'DCDZ' },
-                        { namePrefix: 'SOIL' },
-                        { namePrefix: 'INSECE' }
-                    ],
-                    optionalServices: [SERVICE_FFF0, SERVICE_NORDIC, '0000ffe0-0000-1000-8000-00805f9b34fb']
-                });
+                // Solicitar dispositivo BLE universal
+                try {
+                    bleDevice = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: [
+                            SERVICE_FFF0,
+                            SERVICE_NORDIC,
+                            '0000ffe0-0000-1000-8000-00805f9b34fb',
+                            CHAR_FFF1,
+                            CHAR_FFF2
+                        ]
+                    });
+                } catch (e1) {
+                    bleDevice = await navigator.bluetooth.requestDevice({
+                        filters: [
+                            { namePrefix: 'DC' },
+                            { namePrefix: 'DCDZ' },
+                            { namePrefix: 'SOIL' },
+                            { namePrefix: 'INSECE' }
+                        ],
+                        optionalServices: [SERVICE_FFF0, SERVICE_NORDIC]
+                    });
+                }
 
                 log("Dispositivo seleccionado: " + bleDevice.name);
                 document.getElementById('devName').innerText = bleDevice.name || "DCDZ Sonda";
