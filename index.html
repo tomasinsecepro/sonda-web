@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>INSECE Sonda Live BLE</title>
+    <style>
+        :root {
+            --bg: #0B1120;
+            --card-bg: #1E293B;
+            --primary: #10B981;
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            --border: #334155;
+            --accent-blue: #38BDF8;
+            --accent-orange: #FB923C;
+            --accent-purple: #C084FC;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: var(--bg); color: var(--text-main); min-height: 100vh; padding: 16px; padding-bottom: 40px; }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+        .brand { font-size: 20px; font-weight: 800; letter-spacing: 1px; color: var(--text-main); }
+        .brand span { color: var(--primary); }
+        .badge-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 4px 10px; border-radius: 20px; background: rgba(16, 185, 129, 0.15); color: var(--primary); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+        .badge-live.offline { background: rgba(239, 68, 68, 0.15); color: #EF4444; border-color: rgba(239, 68, 68, 0.3); }
+        .badge-live.offline .dot { background: #EF4444; animation: none; }
+        .badge-live .dot.pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+
+        .btn-connect {
+            width: 100%;
+            padding: 16px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            border: none;
+            cursor: pointer;
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            margin-bottom: 20px;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+        .btn-connect:active { transform: scale(0.98); }
+        .btn-connect.connected { background: linear-gradient(135deg, #EF4444, #DC2626); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3); }
+
+        .device-info { background: rgba(30, 41, 59, 0.6); padding: 10px 14px; border-radius: 10px; font-size: 12px; color: var(--text-muted); margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); }
+        .device-info span.val { color: var(--text-main); font-weight: 700; font-family: monospace; }
+
+        .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+        .card { background: var(--card-bg); border-radius: 14px; padding: 16px; border: 1px solid var(--border); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px; }
+        .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+        .card-icon { font-size: 18px; }
+        .card-val { font-size: 30px; font-weight: 900; color: var(--text-main); line-height: 1; }
+        .card-unit { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-left: 4px; }
+
+        .card.hum .card-val { color: #38BDF8; }
+        .card.temp .card-val { color: #F87171; }
+        .card.ec .card-val { color: #FBBF24; }
+        .card.ph .card-val { color: #34D399; }
+        .card.n .card-val { color: #A7F3D0; }
+        .card.p .card-val { color: #818CF8; }
+        .card.k .card-val { color: #F472B6; }
+
+        .console { background: #000; border-radius: 12px; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; color: #4ADE80; border: 1px solid var(--border); word-break: break-all; margin-top: 10px; }
+        .console-header { display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
+        .console-content { min-height: 40px; }
+
+        .tip-box { background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 12px; font-size: 12px; color: #BAE6FD; line-height: 1.5; margin-bottom: 16px; }
+        .tip-box strong { color: #38BDF8; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="brand">INSECE <span>SOIL BLE</span></div>
+        <div id="liveBadge" class="badge-live offline">
+            <span class="dot"></span>
+            <span id="liveText">Desconectado</span>
+        </div>
+    </div>
+
+    <div class="tip-box">
+        <strong>📱 Instrucciones iPhone (Bluefy):</strong><br>
+        1. Alimenta la sonda con tu powerbank.<br>
+        2. Pulsa el botón verde <strong>CONECTAR SONDA</strong>.<br>
+        3. En la ventana emergente de Bluetooth, selecciona <strong>DCDZ999867300D</strong>.
+    </div>
+
+    <button id="btnConnect" class="btn-connect" onclick="handleConnectClick()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+        <span id="btnText">CONECTAR SONDA BLUETOOTH</span>
+    </button>
+
+    <div class="device-info">
+        <div>Sonda: <span id="devName" class="val">Ninguna</span></div>
+        <div>Trama: <span id="packetCount" class="val">0</span></div>
+    </div>
+
+    <div class="grid">
+        <div class="card hum">
+            <div class="card-top">
+                <span class="card-title">Humedad</span>
+                <span class="card-icon">💧</span>
+            </div>
+            <div>
+                <span id="valHumedad" class="card-val">0.0</span>
+                <span class="card-unit">%</span>
+            </div>
+        </div>
+
+        <div class="card temp">
+            <div class="card-top">
+                <span class="card-title">Temperatura</span>
+                <span class="card-icon">🌡️</span>
+            </div>
+            <div>
+                <span id="valTemp" class="card-val">0.0</span>
+                <span class="card-unit">°C</span>
+            </div>
+        </div>
+
+        <div class="card ec">
+            <div class="card-top">
+                <span class="card-title">Conductividad</span>
+                <span class="card-icon">⚡</span>
+            </div>
+            <div>
+                <span id="valEC" class="card-val">0</span>
+                <span class="card-unit">µS/cm</span>
+            </div>
+        </div>
+
+        <div class="card ph">
+            <div class="card-top">
+                <span class="card-title">pH Suelo</span>
+                <span class="card-icon">🧪</span>
+            </div>
+            <div>
+                <span id="valPH" class="card-val">0.0</span>
+                <span class="card-unit">pH</span>
+            </div>
+        </div>
+
+        <div class="card n">
+            <div class="card-top">
+                <span class="card-title">Nitrógeno (N)</span>
+                <span class="card-icon">🌿</span>
+            </div>
+            <div>
+                <span id="valN" class="card-val">0</span>
+                <span class="card-unit">mg/kg</span>
+            </div>
+        </div>
+
+        <div class="card p">
+            <div class="card-top">
+                <span class="card-title">Fósforo (P)</span>
+                <span class="card-icon">🌾</span>
+            </div>
+            <div>
+                <span id="valP" class="card-val">0</span>
+                <span class="card-unit">mg/kg</span>
+            </div>
+        </div>
+
+        <div class="card k" style="grid-column: span 2;">
+            <div class="card-top">
+                <span class="card-title">Potasio (K)</span>
+                <span class="card-icon">🚜</span>
+            </div>
+            <div>
+                <span id="valK" class="card-val">0</span>
+                <span class="card-unit">mg/kg</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="console">
+        <div class="console-header">
+            <span>Diagnóstico Trama Raw (Modbus RTU)</span>
+            <span id="lastTime">--:--:--</span>
+        </div>
+        <div id="hexLog" class="console-content">Esperando conexión Bluetooth...</div>
+    </div>
+
+    <script>
+        // UUIDs soportados (Sonda industrial DCDZ y variantes)
+        const SERVICE_FFF0 = '0000fff0-0000-1000-8000-00805f9b34fb';
+        const CHAR_FFF1    = '0000fff1-0000-1000-8000-00805f9b34fb';
+        const CHAR_FFF2    = '0000fff2-0000-1000-8000-00805f9b34fb';
+
+        const SERVICE_NORDIC = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const CHAR_NORDIC_TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+        const CHAR_NORDIC_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+        // Petición Modbus: 01 03 00 00 00 07 04 08
+        const MODBUS_REQ = new Uint8Array([0x01, 0x03, 0x00, 0x00, 0x00, 0x07, 0x04, 0x08]);
+
+        let bleDevice = null;
+        let rxChar = null; // Para enviar comandos Modbus
+        let txChar = null; // Para recibir notificaciones
+        let pollTimer = null;
+        let packetCounter = 0;
+        let rxBuffer = [];
+
+        async function handleConnectClick() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                disconnectDevice();
+            } else {
+                connectDevice();
+            }
+        }
+
+        async function connectDevice() {
+            try {
+                if (!navigator.bluetooth) {
+                    alert("Tu navegador no soporta Bluetooth Web. En iPhone, abre esta página dentro de la app 'Bluefy'.");
+                    return;
+                }
+
+                document.getElementById('btnText').innerText = "BUSCANDO SONDA...";
+                log("Iniciando escaneo Bluetooth...");
+
+                // Solicitar dispositivo BLE con filtro o universal
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { namePrefix: 'DC' },
+                        { namePrefix: 'DCDZ' },
+                        { namePrefix: 'SOIL' },
+                        { namePrefix: 'INSECE' }
+                    ],
+                    optionalServices: [SERVICE_FFF0, SERVICE_NORDIC, '0000ffe0-0000-1000-8000-00805f9b34fb']
+                });
+
+                log("Dispositivo seleccionado: " + bleDevice.name);
+                document.getElementById('devName').innerText = bleDevice.name || "DCDZ Sonda";
+                document.getElementById('btnText').innerText = "CONECTANDO...";
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                const server = await bleDevice.gatt.connect();
+                log("Conectado a GATT Server.");
+
+                // Descubrir servicios disponibles
+                let service = null;
+                try {
+                    service = await server.getPrimaryService(SERVICE_FFF0);
+                    log("Servicio FFF0 encontrado.");
+                } catch(e) {
+                    try {
+                        service = await server.getPrimaryService(SERVICE_NORDIC);
+                        log("Servicio Nordic encontrado.");
+                    } catch(e2) {
+                        log("Error: servicio no encontrado: " + e2.message);
+                    }
+                }
+
+                if (!service) {
+                    throw new Error("No se encontró servicio serie compatible.");
+                }
+
+                // Obtener características
+                const characteristics = await service.getCharacteristics();
+                for (let ch of characteristics) {
+                    const props = ch.properties;
+                    log("Char: " + ch.uuid.substring(0, 8) + " (notify:" + props.notify + ", write:" + props.write + ")");
+
+                    if (props.notify || props.indicate) {
+                        txChar = ch;
+                        await txChar.startNotifications();
+                        txChar.addEventListener('characteristicvaluechanged', onCharacteristicValueChanged);
+                        log("✅ Notificaciones activadas.");
+                    }
+
+                    if (props.write || props.writeWithoutResponse) {
+                        rxChar = ch;
+                        log("✅ Canal de comandos listo.");
+                    }
+                }
+
+                if (!rxChar && txChar && (txChar.properties.write || txChar.properties.writeWithoutResponse)) {
+                    rxChar = txChar;
+                }
+
+                // Interfaz en modo Conectado
+                setConnectedUI(true);
+
+                // Arrancar consulta Modbus periódica cada 1.5s
+                startModbusPolling();
+
+            } catch (error) {
+                log("Error al conectar: " + error.message);
+                setConnectedUI(false);
+                document.getElementById('btnText').innerText = "CONECTAR SONDA BLUETOOTH";
+            }
+        }
+
+        function startModbusPolling() {
+            if (pollTimer) clearInterval(pollTimer);
+            sendModbusRequest();
+            pollTimer = setInterval(sendModbusRequest, 1500);
+        }
+
+        async function sendModbusRequest() {
+            if (!rxChar || !bleDevice || !bleDevice.gatt.connected) return;
+            try {
+                if (rxChar.properties.writeWithoutResponse) {
+                    await rxChar.writeValueWithoutResponse(MODBUS_REQ);
+                } else {
+                    await rxChar.writeValueWithResponse(MODBUS_REQ);
+                }
+            } catch(e) {
+                // error silencioso
+            }
+        }
+
+        function onCharacteristicValueChanged(event) {
+            const val = event.target.value;
+            for (let i = 0; i < val.byteLength; i++) {
+                rxBuffer.push(val.getUint8(i));
+            }
+            processBuffer();
+        }
+
+        function processBuffer() {
+            if (rxBuffer.length < 7) return;
+
+            // Buscar cabecera Modbus: [0x01 ó 0xFE, 0x03, 0x0E (14 bytes de datos)]
+            for (let i = 0; i <= rxBuffer.length - 19; i++) {
+                if ((rxBuffer[i] === 0x01 || rxBuffer[i] === 0xFE) && rxBuffer[i+1] === 0x03 && rxBuffer[i+2] === 0x0E) {
+                    const frame = rxBuffer.slice(i, i + 19);
+                    parseModbusFrame(frame);
+                    rxBuffer.splice(0, i + 19);
+                    return;
+                }
+            }
+
+            if (rxBuffer.length > 256) {
+                rxBuffer = [];
+            }
+        }
+
+        function parseModbusFrame(bytes) {
+            packetCounter++;
+            document.getElementById('packetCount').innerText = packetCounter;
+
+            const hex = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+            log("TRAMA: " + hex);
+
+            // Extraer 7 valores (Big Endian)
+            const humedad     = ((bytes[3] << 8) | bytes[4]) / 10.0;
+            const temperatura = ((bytes[5] << 8) | bytes[6]) / 10.0;
+            const ec          = (bytes[7] << 8) | bytes[8];
+            const ph          = ((bytes[9] << 8) | bytes[10]) / 10.0;
+            const nitrogeno   = (bytes[11] << 8) | bytes[12];
+            const fosforo     = (bytes[13] << 8) | bytes[14];
+            const potasio     = (bytes[15] << 8) | bytes[16];
+
+            document.getElementById('valHumedad').innerText = humedad.toFixed(1);
+            document.getElementById('valTemp').innerText = temperatura.toFixed(1);
+            document.getElementById('valEC').innerText = ec;
+            document.getElementById('valPH').innerText = ph.toFixed(1);
+            document.getElementById('valN').innerText = nitrogeno;
+            document.getElementById('valP').innerText = fosforo;
+            document.getElementById('valK').innerText = potasio;
+
+            const now = new Date();
+            document.getElementById('lastTime').innerText = now.toTimeString().split(' ')[0];
+        }
+
+        function setConnectedUI(connected) {
+            const badge = document.getElementById('liveBadge');
+            const text = document.getElementById('liveText');
+            const dot = badge.querySelector('.dot');
+            const btn = document.getElementById('btnConnect');
+
+            if (connected) {
+                badge.className = "badge-live";
+                text.innerText = "Transfiriendo";
+                dot.className = "dot pulse";
+                btn.className = "btn-connect connected";
+                btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg><span>DESCONECTAR SONDA</span>`;
+            } else {
+                badge.className = "badge-live offline";
+                text.innerText = "Desconectado";
+                dot.className = "dot";
+                btn.className = "btn-connect";
+                btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg><span>CONECTAR SONDA BLUETOOTH</span>`;
+            }
+        }
+
+        function onDisconnected() {
+            log("Dispositivo desconectado.");
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = null;
+            setConnectedUI(false);
+        }
+
+        function disconnectDevice() {
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = null;
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+            setConnectedUI(false);
+            log("Desconectado manualmente.");
+        }
+
+        function log(msg) {
+            console.log(msg);
+            document.getElementById('hexLog').innerText = msg;
+        }
+    </script>
+</body>
+</html>
